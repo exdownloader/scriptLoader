@@ -1,8 +1,8 @@
 ﻿using IllusionPlugin;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using UnityEngine;
 
 namespace scriptLoader
@@ -12,17 +12,18 @@ namespace scriptLoader
         // Keycode used to execute script.
         public KeyCode executeKey = KeyCode.LeftAlt;
 
-        public Action m_OnUpdate = null;
-        public Action m_OnRender = null;
-        public Action m_OnLateUpdate = null;
-        public Action m_OnGui = null;
+        private Assembly[] builtInTargets = null;
 
         public void OnApplicationStart()
         {
-            // Attempt to load mod prefs for key code.
-            var key = ModPrefs.GetString("scriptLoader", "scriptKey", "LeftAlt", true);
+            var assemblyNames = AppDomain.CurrentDomain.GetAssemblies().Select(x => x.GetName().Name).ToArray();
+            // Resolve assemblies from current loaded assemblies.
+            builtInTargets = AppDomain.CurrentDomain.GetAssemblies().Where(x => assemblyNames.Contains(x.GetName().Name)).ToArray();
+
             try
             {
+                // Attempt to load mod prefs for key code.
+                var key = ModPrefs.GetString("scriptLoader", "scriptKey", "LeftAlt", true);
                 // Resolve enum from string and assign.
                 executeKey = (KeyCode)Enum.Parse(typeof(KeyCode), key, true);
             }
@@ -47,15 +48,12 @@ namespace scriptLoader
                     Names can be fetched from AppDomain.CurrentDomain.GetAssemblies()
                 */
 
-                var targets = new[] { "UnityEngine", "Assembly-CSharp", "mscorlib" , "UnityEngine.UI", "Assembly-CSharp-firstpass", "scriptLoader", "System", "System.Core", "System.Collections.Generic", "System.Linq" };
-
-                // Resolve assemblies from current loaded assemblies.
-                var resolved = AppDomain.CurrentDomain.GetAssemblies().Where(x => targets.Contains(x.GetName().Name)).ToArray();
+                var projectDirectoryInfo = new DirectoryInfo(path);
 
                 // Create ScriptEngine, add referenced assemblies list and execute script.
-                var se = new ScriptEngine();
-                se.RegisterAssemblies(resolved);
-                se.Run(File.ReadAllText(path));
+                var se = new ScriptEngine(projectDirectoryInfo);
+                se.RegisterAssemblies(builtInTargets);
+                se.Run();
 
                 // Add another separator and confirm completion.
                 Console.WriteLine("##DONE");
